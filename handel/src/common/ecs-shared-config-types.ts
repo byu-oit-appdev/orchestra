@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-import { EnvironmentVariables } from 'handel-extension-api';
+import {EnvironmentVariables, ExtraSecrets} from 'handel-extension-api';
 
 export interface ContainerConfig {
     name: string;
@@ -25,6 +25,7 @@ export interface ContainerConfig {
     links?: string[];
     routing?: ContainerRoutingConfig;
     environment_variables?: EnvironmentVariables;
+    secrets?: ExtraSecrets;
 }
 
 export interface ContainerRoutingConfig {
@@ -89,6 +90,7 @@ export interface HandlebarsEcsTemplateContainer {
     maxMb: number;
     cpuUnits: number;
     environmentVariables: EnvironmentVariables;
+    secrets?: Record<string, string>;
     routingInfo?: HandlebarsEcsTemplateRoutingInfo;
     portMappings: number[];
     imageName: string;

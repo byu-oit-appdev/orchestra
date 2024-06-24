@@ -56,6 +56,22 @@ Resources:
             - ecs-tasks.amazonaws.com
           Action:
           - sts:AssumeRole
+      Policies:
+        - PolicyName: AllowFetchSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            {{#each executionPolicyStatements}}
+            Statement:
+            - Effect: {{Effect}}
+              Action:
+              {{#each Action}}
+              - '{{{this}}}'
+              {{/each}}
+              Resource:
+              {{#each Resource}}
+              - '{{{this}}}'
+              {{/each}}
+            {{/each}}
       ManagedPolicyArns:
       - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
       {{#if permissionsBoundary}}
@@ -150,6 +166,13 @@ Resources:
         - Name: {{@key}}
           Value: {{this}}
         {{/each}}
+        {{#if secrets}}
+        Secrets:
+        {{#each secrets}}
+        - Name: {{@key}}
+          ValueFrom: {{this}}
+        {{/each}}
+        {{/if}}
         {{#if mountPoints}}
         MountPoints:
         {{#each mountPoints}}

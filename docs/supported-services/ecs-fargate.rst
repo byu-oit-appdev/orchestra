@@ -103,6 +103,10 @@ The `containers` section is defined by the following schema:
         health_check_path: <string> # Optional. Default: /
       environment_variables: # Optional
         <string>: <string>
+      secrets:
+        <string>:
+          # either 'app:' or 'global:' see "Secret Injection" below
+          app: my-ssm-parameter-name
 
 .. NOTE::
 
@@ -200,6 +204,61 @@ Logging
 If logging is enabled, a CloudWatch log group will be created, with a name like fargate/<appName>-<environmentName>-<serviceName>.
 Each container in the container configuration will have a log prefix matching its name. The retention time for the log
 group is set with `log_retention_in_days`, and defaults to keeping the logs indefinitely.
+
+
+.. _fargate-secrets:
+
+Secret Injection
+~~~~~~~~~~~~~~~~
+By default, the ECS service will inject any parameter store parameters created by your declared dependencies using
+the ECS support for `injecting values from SSM <https://docs.aws.amazon.com/AmazonECS/latest/developerguide/specifying-sensitive-data.html>`_.
+
+This support causes environment variables to be set on your tasks which will contain the decrypted values from SSM Parameter
+Store.
+
+For example, if your ECS service depends on an Aurora Serverless database, like in the following Handel file (abridged
+for clarity):
+
+.. code-block:: yaml
+
+    environments:
+      dev:
+        my-db:
+          type: aurora-serverless
+          # other aurora serverless settings
+        my-app:
+          type: ecs-fargate
+          dependencies:
+            - database
+          # Other ecs settings, including container configs
+
+The Aurora Serverless service will create two parameters in Parameter Store: `/<app name>/<env name>/my-db/db_username` and `/<app name>/<env name>/my-db/db_password`.
+The ECS deployer will look for any parameters with the prefix `/<app name>/<env name>/my-db/` and will cause the values to be
+injected into environment variables named `MY_DB_DB_USERNAME` and `MY_DB_DB_PASSWORD` (following the pattern `<dependency name>_<SSM parameter name>`.
+
+You can also add custom secrets to your task definition. In each container configuration, you can add a `secrets` key:
+
+.. code-block:: yaml
+
+    environments:
+      dev:
+        my-app:
+          type: ecs-fargate
+          containers:
+            - name: mywebapp
+              secrets:
+                MY_APP_SECRET: # Name of the environment variable in which to inject the value
+                  app: my-secret # Will load the secret from /<app name>/<env name/my-secret
+                MY_GLOBAL_SECRET: # Name of the environment variable in which to inject the value
+                  global: my-secret # Will load the secret from /handel/global/my-secret
+              # Other container settings
+
+If the secret value uses the `app:` key, the secret will be resolved relative to the app-specific prefix, as described
+in :ref:`accessing-secrets-application`. If it uses the `global:` key, the secret will be resolved relative to the
+`/handel/global/` prefix, as described in :ref:`accessing-secrets-global`.
+
+If you specify a custom secret with the same environment variable name as one from a dependency, the custom secret will
+replace the auto-injected dependency secret.
 
 .. _fargate-example-handel-files:
 

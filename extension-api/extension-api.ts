@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-import { EC2 } from 'aws-sdk';
+import {EC2} from 'aws-sdk';
 
 /***********************************
  * Types for the Extension contract
@@ -226,10 +226,22 @@ export interface IServiceContext<Config extends ServiceConfig> extends HasAppSer
     tags: Tags;
 
     resourceName(): string;
+
     stackName(): string;
+
     injectedEnvVars(outputs: any): any;
+
     ssmApplicationPrefix(): string;
+
     ssmParamName(suffix: string): string;
+
+    ssmParamPath(suffix: string): string;
+
+    allSsmParamNames(suffix: string): string[];
+
+    ssmServicePath(): string;
+
+    ssmServicePrefix(): string;
 }
 
 export function isServiceContext(obj: any): obj is ServiceContext<ServiceConfig> {
@@ -261,6 +273,8 @@ export interface ServiceConfig {
     event_consumers?: ServiceEventConsumer[];
     dependencies?: string[];
 }
+
+export type InjectableSecretsServiceConfig = ServiceConfig & HasInjectableSecrets;
 
 export function isServiceConfig(obj: any): obj is ServiceConfig {
     return !!obj
@@ -310,6 +324,9 @@ export interface IDeployContext extends HasAppServiceInfo {
     environmentVariables: DeployContextEnvironmentVariables;
     // Scripts intended to be run on startup by the consuming resource.
     scripts: string[];
+
+    ssmServicePath: string;
+    ssmServicePrefix: string;
 
     addEnvironmentVariables(envVars: EnvironmentVariables): void;
 }
@@ -453,9 +470,24 @@ export class ServiceContext<Config extends ServiceConfig> implements IServiceCon
         return envVars;
     }
 
+    public allSsmParamNames(suffix: string): string[] {
+        return [this.ssmParamName(suffix), this.ssmParamPath(suffix)];
+    }
+
+    public ssmServicePath(): string {
+        return `${this.ssmApplicationPath()}${this.serviceName}/`;
+    }
+
+    public ssmServicePrefix(): string {
+        return `${this.ssmApplicationPrefix()}.${this.serviceName}`;
+    }
+
     public ssmParamName(suffix: string) {
-        const prefix = `${this.ssmApplicationPrefix()}.${this.serviceName}`;
-        return `${prefix}.${suffix}`;
+        return `${this.ssmServicePrefix()}.${suffix}`;
+    }
+
+    public ssmParamPath(suffix: string) {
+        return `${this.ssmServicePath()}${suffix.replace(/\./, '/')}`;
     }
 
     public ssmApplicationPrefix(): string {
@@ -518,11 +550,16 @@ export class DeployContext implements IDeployContext {
     // Scripts intended to be run on startup by the consuming resource.
     public scripts: string[];
 
+    public ssmServicePrefix: string;
+    public ssmServicePath: string;
+
     constructor(serviceContext: ServiceContext<ServiceConfig>) {
         this.appName = serviceContext.appName;
         this.environmentName = serviceContext.environmentName;
         this.serviceName = serviceContext.serviceName;
         this.serviceType = serviceContext.serviceType;
+        this.ssmServicePath = serviceContext.ssmServicePath();
+        this.ssmServicePrefix = serviceContext.ssmServicePrefix();
         this.eventOutputs = null;
         this.policies = [];
         this.environmentVariables = {};
@@ -540,7 +577,7 @@ export class DeployContext implements IDeployContext {
     }
 
     public getInjectedEnvVarName(suffix: string) {
-        return `${this.serviceName}_${suffix}`.toUpperCase().replace(/-/g, '_');
+        return `${this.serviceName}_${suffix}`.toUpperCase().replace(/[-/.]/g, '_');
     }
 }
 
@@ -615,6 +652,41 @@ export class UnPreDeployContext implements IUnPreDeployContext {
 /***********************************
  * Other Types
  ***********************************/
+
+export interface HasInjectableSecrets {
+    injectSecrets: ExtraSecrets;
+}
+
+export interface ExtraSecrets {
+    [EnvName: string]: SecretSource;
+}
+
+export function isExtraSecrets(obj: any): obj is ExtraSecrets {
+    return !!obj && Object.values(obj).every(isSecretSource);
+}
+
+export type SecretSource = AppSecret | GlobalSecret;
+
+export function isSecretSource(obj: any): obj is SecretSource {
+    return isAppSecret(obj) || isGlobalSecret(obj);
+}
+
+export interface AppSecret {
+    app: string;
+}
+
+export interface GlobalSecret {
+    global: string;
+}
+
+export function isAppSecret(obj: any): obj is AppSecret {
+    return 'app' in obj;
+}
+
+export function isGlobalSecret(obj: any): obj is GlobalSecret {
+    return 'global' in obj;
+}
+
 export interface Tags {
     [key: string]: string;
 }

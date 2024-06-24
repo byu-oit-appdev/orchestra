@@ -24,14 +24,7 @@ import {
     UnDeployContext,
     UnPreDeployContext
 } from 'handel-extension-api';
-import {
-    checkPhase,
-    deletePhases,
-    deployPhase,
-    handlebars,
-    preDeployPhase,
-    tagging
-} from 'handel-extension-support';
+import {checkPhase, deletePhases, deployPhase, handlebars, preDeployPhase, tagging} from 'handel-extension-support';
 import * as winston from 'winston';
 import * as ec2Calls from '../../aws/ec2-calls';
 import * as ecsCalls from '../../aws/ecs-calls';
@@ -40,7 +33,7 @@ import * as containersSection from '../../common/ecs-containers';
 import * as routingSection from '../../common/ecs-routing';
 import * as serviceAutoScalingSection from '../../common/ecs-service-auto-scaling';
 import * as volumesSection from '../../common/ecs-volumes';
-import { FargateServiceConfig, HandlebarsFargateTemplateConfig } from './config-types';
+import {FargateServiceConfig, HandlebarsFargateTemplateConfig} from './config-types';
 
 const SERVICE_NAME = 'ECS Fargate';
 
@@ -70,13 +63,15 @@ async function getCompiledEcsFargateTemplate(serviceName: string, ownServiceCont
     const autoScaling = serviceAutoScalingSection.getTemplateAutoScalingConfig(ownServiceContext, serviceName);
 
     // Configure containers in the task definition
-    const containerConfigs = containersSection.getContainersConfig(ownServiceContext, dependenciesDeployContexts, serviceName);
+    const containerConfigs = await containersSection.getContainersConfig(ownServiceContext, dependenciesDeployContexts, serviceName);
     const oneOrMoreTasksHasRouting = routingSection.oneOrMoreTasksHasRouting(ownServiceContext);
 
     const logRetention = ownServiceContext.params.log_retention_in_days;
 
     // Figure out whether the private subnets should auto-assign public IPs
     const shouldAssignPublicIp = await ec2Calls.shouldAssignPublicIp(accountConfig.private_subnets);
+
+    const executionPolicyStatements = containersSection.getExecutionRuleSecretStatements(ownServiceContext, containerConfigs);
 
     // Create object used for templating the CloudFormation template
     const handlebarsParams: HandlebarsFargateTemplateConfig = {
@@ -90,6 +85,7 @@ async function getCompiledEcsFargateTemplate(serviceName: string, ownServiceCont
         minimumHealthyPercentDeployment: '50', // TODO - Do we need to support more than just 50?
         vpcId: accountConfig.vpc,
         policyStatements: getTaskRoleStatements(ownServiceContext, dependenciesDeployContexts),
+        executionPolicyStatements: executionPolicyStatements,
         deploymentSuffix: Math.floor(Math.random() * 10000), // ECS won't update unless something in the service changes.
         tags: tagging.getTags(ownServiceContext),
         containerConfigs,

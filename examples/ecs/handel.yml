@@ -2,10 +2,30 @@ version: 1
 
 name: ecs-test
 
+tags:
+  team: test
+  data-sensitivity: public
+
 environments:
   dev:
+    database:
+      type: aurora-serverless
+      engine: mysql
+      version: 5.6.10a
+      database_name: HandelEcsTest
+      scaling:
+        min_capacity: 2
+        max_capacity: 16
+        auto_pause: true
+        seconds_until_auto_pause: 600 # 10 minutes
+      cluster_parameters: # This is where you can set parameters that configure the cluster as a whole
+        character_set_database: utf8mb4
+      tags:
+        some: tag
     webapp:
       type: ecs
+      dependencies:
+        - database
       containers:
       - name: ecstest
         image_name: nginx:latest
@@ -14,6 +34,9 @@ environments:
         routing:
           base_path: /
           health_check_path: /
+        secrets:
+          MY_SECRET:
+            global: test
       auto_scaling:
         min_tasks: 1
         max_tasks: 4

@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-import { expect } from 'chai';
+import {expect} from 'chai';
 import 'mocha';
 import * as sinon from 'sinon';
 import awsWrapper from '../../src/aws/aws-wrapper';
@@ -48,6 +48,33 @@ describe('ssmCalls module', () => {
             const success = await ssmCalls.deleteParameters(['Param1', 'Param1']);
             expect(success).to.equal(true);
             expect(deleteParameterStub.callCount).to.equal(2);
+        });
+    });
+
+    describe('listParameterNamesStartingWith', () => {
+        it('makes a request to SSM with the correct filters', async () => {
+            const stub = sandbox.stub(awsWrapper.ssm, 'describeParameters').resolves([]);
+
+            await ssmCalls.listParameterNamesStartingWith('/foobar/', 'foo.bar.');
+
+            const actualReq: AWS.SSM.DescribeParametersRequest = stub.firstCall.args[0];
+
+            expect(actualReq.ParameterFilters).to.exist
+                .and.to.eql([{
+                Key: 'Name',
+                Option: 'BeginsWith',
+                Values: ['/foobar/', 'foo.bar.']
+            }]);
+        });
+        it('extracts the names from the results', async () => {
+            const stub = sandbox.stub(awsWrapper.ssm, 'describeParameters').resolves([
+                {Name: '/foo/bar/baz'},
+                {Name: 'foo.bar.baz'}
+            ]);
+
+            const result = await ssmCalls.listParameterNamesStartingWith('/foo/bar/', 'foo.bar.');
+
+            expect(result).to.have.members(['/foo/bar/baz', 'foo.bar.baz']);
         });
     });
 });

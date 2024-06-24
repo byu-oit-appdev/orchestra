@@ -62,9 +62,16 @@ Each parameter Handel puts in the parameter store has a common prefix, which is 
 
 .. code-block:: none
 
-    <app_name>.<environment_name>
+    /<app_name>/<environment_name>/
 
 You can use the :ref:`consuming-service-dependencies-common-vars` to obtain the value of this prefix.
+
+.. WARNING::
+
+    Previously Handel wired permissions based on a prefix like: ``<appName>.<environmentName>`` This functionality is being deprecated in favor of paths. As a convenience, Handel still wires the permissions and injects an environment variable called ``HANDEL_PARAMETER_STORE_PREFIX`` into your application. This variable contains the pre-built ``<appName>.<environmentName>`` prefix so that you don't have to build it yourself. Please only use prefix if required. Otherwise Path is preferred. More info can be found `Here <https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-su-organize.html>`_
+
+    Any Handel services which add secrets to Parameter Store will, by default, create both path- and dot-style parameters.
+
 
 .. _consuming-service-dependencies-common-vars:
 
@@ -83,7 +90,9 @@ In addition to environment variables injected by services your applications cons
      - This is the value of the *\<environment\>* field from your Handel file. It is the name of the environment the current service is a part of.
    * - HANDEL_SERVICE_NAME
      - This is the value of the *\<service_name>* field from your Handel file. It is the name of the currently deployed service.
-   * - HANDEL_PARAMETER_STORE_PREFIX
+   * - HANDEL_PARAMETER_STORE_PATH
      - This is the :ref:`prefix <parameter-store-prefix>` used for secrets stored in Parameter Store.
+   * - HANDEL_PARAMETER_STORE_PREFIX
+     - Deprecated. This is an old form of the :ref:`prefix <parameter-store-prefix>` used for secrets stored in Parameter Store.
    * - HANDEL_REGION_NAME
      - This is the value of the *<region_name>* field from your Handel file, or the current region if the region id not specified.

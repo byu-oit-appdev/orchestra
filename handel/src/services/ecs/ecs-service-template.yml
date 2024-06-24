@@ -104,7 +104,38 @@ Resources:
       Path: "/"
       Roles:
       - Ref: EcsIamRole
-  
+  TaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Path: "/services/"
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - ecs-tasks.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Policies:
+        - PolicyName: AllowFetchSecrets
+          PolicyDocument:
+            Version: "2012-10-17"
+            {{#each executionPolicyStatements}}
+            Statement:
+            - Effect: {{Effect}}
+              Action:
+              {{#each Action}}
+               - '{{{this}}}'
+              {{/each}}
+              Resource:
+              {{#each Resource}}
+               - '{{{this}}}'
+              {{/each}}
+            {{/each}}
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+
   #
   # Configure ECS Cluster
   #
@@ -256,6 +287,7 @@ Resources:
     Properties:
       Family: {{clusterName}}
       TaskRoleArn: !GetAtt TaskRole.Arn
+      ExecutionRoleArn: !GetAtt TaskExecutionRole.Arn
       NetworkMode: bridge
       {{#if volumes}}
       Volumes:
@@ -300,6 +332,13 @@ Resources:
         - Name: {{@key}}
           Value: {{this}}
         {{/each}}
+        {{#if secrets}}
+        Secrets:
+        {{#each secrets}}
+        - Name: {{@key}}
+          ValueFrom: {{this}}
+        {{/each}}
+        {{/if}}
         {{#if mountPoints}}
         MountPoints:
         {{#each mountPoints}}

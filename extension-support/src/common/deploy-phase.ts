@@ -39,13 +39,11 @@ export async function deployCloudFormationStack(serviceContext: ServiceContext<S
     if (!stack) {
         const s3ObjectData = await uploadCFTemplateToHandelBucket(serviceContext, cfTemplate);
         return cloudFormationCalls.createStack(stackName, s3ObjectData.Location, cfParameters, timeoutInMinutes, stackTags);
-    }
-    else {
+    } else {
         if (updatesSupported) {
             const s3ObjectData = await uploadCFTemplateToHandelBucket(serviceContext, cfTemplate);
             return cloudFormationCalls.updateStack(stackName, s3ObjectData.Location, cfParameters, stackTags);
-        }
-        else { // Updates not supported, so just return stack
+        } else { // Updates not supported, so just return stack
             return stack;
         }
     }
@@ -111,8 +109,7 @@ export async function uploadDeployableArtifactToHandelBucket(serviceContext: Ser
     const artifactPrefix = getServiceUploadLocation(serviceContext);
     if (fileStats.isDirectory()) { // Zip up artifact and upload it
         return uploadDirectoryToHandelBucket(pathToArtifact, artifactPrefix, s3FileName, accountConfig);
-    }
-    else { // Is file (i.e. WAR file or some other already-compiled archive), just upload directly
+    } else { // Is file (i.e. WAR file or some other already-compiled archive), just upload directly
         return uploadFileToHandelBucket(pathToArtifact, artifactPrefix, s3FileName, accountConfig);
     }
 }
@@ -133,8 +130,9 @@ export function getAllPolicyStatementsForServiceRole(serviceContext: ServiceCont
     }
 
     if (includeAppSecretsStatements) {
-        const applicationParameters = `arn:aws:ssm:${serviceContext.accountConfig.region}:${serviceContext.accountConfig.account_id}:parameter/${serviceContext.appName}.${serviceContext.environmentName}*`;
-        const applicationParametersPath = `arn:aws:ssm:${serviceContext.accountConfig.region}:${serviceContext.accountConfig.account_id}:parameter/${serviceContext.appName}/${serviceContext.environmentName}/*`;
+        const applicationParameters = `arn:aws:ssm:${serviceContext.accountConfig.region}:${serviceContext.accountConfig.account_id}:parameter/${serviceContext.ssmApplicationPrefix()}.*`;
+        const applicationParametersPath = `arn:aws:ssm:${serviceContext.accountConfig.region}:${serviceContext.accountConfig.account_id}:parameter/${serviceContext.ssmApplicationPath()}*`
+            .replace(/\/+/g, '/');
         const appSecretsAcessStatements = [
             {
                 Effect: 'Allow',
@@ -155,7 +153,8 @@ export function getAllPolicyStatementsForServiceRole(serviceContext: ServiceCont
                 Resource: [
                     applicationParameters,
                     applicationParametersPath,
-                    `arn:aws:ssm:${serviceContext.accountConfig.region}:${serviceContext.accountConfig.account_id}:parameter/handel.global*`
+                    `arn:aws:ssm:${serviceContext.accountConfig.region}:${serviceContext.accountConfig.account_id}:parameter/handel/global/*`,
+                    `arn:aws:ssm:${serviceContext.accountConfig.region}:${serviceContext.accountConfig.account_id}:parameter/handel.global.*`
                 ]
             },
             {
@@ -192,8 +191,13 @@ export function getAllPolicyStatementsForServiceRole(serviceContext: ServiceCont
 }
 
 export async function addItemToSSMParameterStore(ownServiceContext: ServiceContext<ServiceConfig>, paramName: string, paramValue: string): Promise<boolean> {
-    const fullParamName = ownServiceContext.ssmParamName(paramName);
-    await ssmCalls.storeParameter(fullParamName, 'SecureString', paramValue);
+    const promises = ownServiceContext.allSsmParamNames(paramName)
+        .map(it => {
+            ssmCalls.storeParameter(it, 'SecureString', paramValue);
+        });
+
+    await Promise.all(promises);
+
     return true;
 }
 
@@ -203,11 +207,7 @@ export async function addItemToSSMParameterStore(ownServiceContext: ServiceConte
 function getEnvVarsFromDependencyDeployContexts(deployContexts: DeployContext[]): EnvironmentVariables {
     const envVars: EnvironmentVariables = {};
     for (const deployContext of deployContexts) {
-        for (const envVarKey in deployContext.environmentVariables) {
-            if (deployContext.environmentVariables.hasOwnProperty(envVarKey)) {
-                envVars[envVarKey] = deployContext.environmentVariables[envVarKey];
-            }
-        }
+        Object.assign(envVars, deployContext.environmentVariables);
     }
     return envVars;
 }

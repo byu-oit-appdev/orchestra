@@ -79,6 +79,31 @@
                         },
                         "errorMessage": "Must contain 1 or more simple key/value pairs where the values are strings or numbers",
                         "additionalProperties": false
+                    },
+                    "secrets": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "oneOf": [
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "app": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": ["app"]
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "global": {
+                                            "type": "string"
+                                        }
+                                    },
+                                    "required": ["global"]
+                                }
+                            ]
+                        }
                     }
                 },
                 "required": [

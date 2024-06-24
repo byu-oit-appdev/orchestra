@@ -14,13 +14,12 @@
  * limitations under the License.
  *
  */
-import { DeployContext, EnvironmentVariables, ServiceContext } from 'handel-extension-api';
-import { deployPhase } from 'handel-extension-support';
-import * as _ from 'lodash';
-import { FargateServiceConfig } from '../services/ecs-fargate/config-types';
-import { EcsServiceConfig } from '../services/ecs/config-types';
+import {DeployContext, ExtraSecrets, isAppSecret, isGlobalSecret, ServiceContext} from 'handel-extension-api';
+import {awsCalls, deployPhase} from 'handel-extension-support';
+import {FargateServiceConfig} from '../services/ecs-fargate/config-types';
+import {EcsServiceConfig} from '../services/ecs/config-types';
 import * as routingSection from './ecs-routing';
-import { ContainerConfig, HandlebarsEcsTemplateContainer } from './ecs-shared-config-types';
+import {ContainerConfig, HandlebarsEcsTemplateContainer} from './ecs-shared-config-types';
 import * as volumesSection from './ecs-volumes';
 
 function serviceDefinitionHasContainer(serviceParams: EcsServiceConfig, containerName: string) {
@@ -62,12 +61,10 @@ function getImageName(container: ContainerConfig, ownServiceContext: ServiceCont
         if (customImageName.startsWith('<account>')) { // Comes from own account registry
             const imageNameAndTag = customImageName.substring(9);
             return `${accountConfig.account_id}.dkr.ecr.${accountConfig.region}.amazonaws.com${imageNameAndTag}`;
-        }
-        else { // Must come from somewhere else (Docker Hub, Quay.io, etc.)
+        } else { // Must come from somewhere else (Docker Hub, Quay.io, etc.)
             return customImageName;
         }
-    }
-    else { // Else try to use default image name
+    } else { // Else try to use default image name
         return `${accountConfig.account_id}.dkr.ecr.${accountConfig.region}.amazonaws.com/${ownServiceContext.appName}-${ownServiceContext.serviceName}-${container.name}:${ownServiceContext.environmentName}`;
     }
 }
@@ -97,16 +94,32 @@ function getLinksForContainer(container: ContainerConfig): string[] | undefined 
  * Users may specify from 1 to n containers in their configuration, so this function will return
  * a list of 1 to n containers.
  */
-export function getContainersConfig(ownServiceContext: ServiceContext<EcsServiceConfig>, dependenciesDeployContexts: DeployContext[], clusterName: string): HandlebarsEcsTemplateContainer[] {
+export async function getContainersConfig(
+    ownServiceContext: ServiceContext<EcsServiceConfig>,
+    dependenciesDeployContexts: DeployContext[],
+    clusterName: string
+): Promise<HandlebarsEcsTemplateContainer[]> {
     const serviceParams = ownServiceContext.params;
     const containerConfigs: HandlebarsEcsTemplateContainer[] = [];
+
+    const dependencySecrets = await getDependencySecretMappings(dependenciesDeployContexts);
+
     let albPriority = 1;
     for (const container of serviceParams.containers) {
+        let secrets: SecretEnvMapping | undefined = Object.assign({}, dependencySecrets);
+        if (container.secrets) {
+            const resolved = await getCustomSecretMappings(ownServiceContext, container.secrets);
+            Object.assign(secrets, resolved);
+        }
+        if (Object.keys(secrets).length === 0) {
+            secrets = undefined;
+        }
         const containerConfig: HandlebarsEcsTemplateContainer = {
             name: container.name,
             maxMb: container.max_mb || 128,
             cpuUnits: container.cpu_units || 100,
             environmentVariables: deployPhase.getEnvVarsForDeployedService(ownServiceContext, dependenciesDeployContexts, container.environment_variables),
+            secrets,
             portMappings: [], // This is filled up below if any mappings present
             imageName: getImageName(container, ownServiceContext),
             mountPoints: volumesSection.getMountPointsForContainer(dependenciesDeployContexts), // Add mount points if present
@@ -133,6 +146,26 @@ export function getContainersConfig(ownServiceContext: ServiceContext<EcsService
     return containerConfigs;
 }
 
+export function getExecutionRuleSecretStatements(serviceContext: ServiceContext<EcsServiceConfig | FargateServiceConfig>, containers: HandlebarsEcsTemplateContainer[]) {
+    const secretArns = containers.reduce((set, c) => {
+        if (c.secrets) {
+            Object.values(c.secrets).forEach(it => set.add(it));
+        }
+        return set;
+    }, new Set());
+    return [{
+        Effect: 'Allow',
+        Action: [
+            'ssm:GetParameters',
+            'ssm:GetParameter',
+            'ssm:GetParametersByPath',
+            // We don't actually support finding params for secrets manager yet, but let's add the permission anyway
+            'secretsmanager:GetSecretValue'
+        ],
+        Resource: [...secretArns]
+    }];
+}
+
 /**
  * This function is called by the "check" lifecycle phase to check the information in the
  * "containers" section in the Handel service configuration
@@ -142,16 +175,14 @@ export function checkContainers(serviceContext: ServiceContext<EcsServiceConfig 
     // Require at least one container definition
     if (!params.containers || params.containers.length === 0) {
         errors.push(`You must specify at least one container in the 'containers' section`);
-    }
-    else {
+    } else {
         let alreadyHasOneRouting = false;
         for (const container of params.containers) {
             if (container.routing) {
                 // Only allow one 'routing' section currently
                 if (alreadyHasOneRouting) {
                     errors.push(`You may not specify a 'routing' section in more than one container. This is due to a current limitation in ECS load balancing`);
-                }
-                else {
+                } else {
                     alreadyHasOneRouting = true;
                 }
 
@@ -163,5 +194,70 @@ export function checkContainers(serviceContext: ServiceContext<EcsServiceConfig 
 
             checkLinks(serviceContext, container, errors);
         }
+    }
+}
+
+interface SecretEnvMapping {
+    [SecretEnvName: string]: SecretArn;
+}
+
+type SecretArn = string;
+
+async function getCustomSecretMappings(
+    serviceContext: ServiceContext<any>,
+    extraSecrets: ExtraSecrets
+): Promise<SecretEnvMapping> {
+    const nameToEnv: Record<string, string> = Object.entries(extraSecrets).reduce((agg, [env, source]) => {
+        let base: string;
+        let name: string;
+        if (isAppSecret(source)) {
+            base = serviceContext.ssmApplicationPath();
+            name = source.app;
+        } else if (isGlobalSecret(source)) {
+            base = '/handel/global/';
+            name = source.global;
+        } else {
+            return agg;
+        }
+        const fullName = `${base}/${name}`.replace(/\/+/g, '/');
+        return Object.assign(agg, {[fullName]: env});
+    }, {});
+    const arns = await awsCalls.ssm.getArnsForNames(Object.keys(nameToEnv));
+    return arns.reduce((agg, it) => {
+        return Object.assign(agg, {
+            [nameToEnv[it.name]]: it.arn
+        });
+    }, {});
+}
+
+async function getDependencySecretMappings(dependencies: DeployContext[]): Promise<SecretEnvMapping> {
+    const results = await Promise.all(dependencies.map(getSingle));
+    return results.reduce((agg, it) => Object.assign(agg, it));
+
+    async function getSingle(dependency: DeployContext) {
+        const path = dependency.ssmServicePath;
+        const fixedPath = path.endsWith('/') ? path : path + '/';
+        const dots = dependency.ssmServicePrefix + '.';
+
+        const [pathResult, dotResult] = await Promise.all([
+            getForPrefix(dependency, fixedPath),
+            getForPrefix(dependency, dots)
+        ]);
+        return Object.assign({} as SecretEnvMapping, dotResult, pathResult);
+    }
+
+    async function getForPrefix(dependency: DeployContext, prefix: string) {
+        const names = await awsCalls.ssm.listParameterNamesStartingWith(prefix);
+        if (!names || names.length === 0) {
+            return {};
+        }
+        const r = await awsCalls.ssm.getArnsForNames(names);
+        return r.reduce((agg, it) => {
+            const suffix = it.name.substring(prefix.length);
+            const envName = dependency.getInjectedEnvVarName(suffix);
+            return Object.assign(agg, {
+                [envName]: it.arn
+            });
+        }, {});
     }
 }

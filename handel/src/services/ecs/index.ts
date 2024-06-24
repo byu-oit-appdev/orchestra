@@ -39,7 +39,6 @@ import * as containersSection from '../../common/ecs-containers';
 import * as routingSection from '../../common/ecs-routing';
 import * as serviceAutoScalingSection from '../../common/ecs-service-auto-scaling';
 import * as volumesSection from '../../common/ecs-volumes';
-import * as util from '../../common/util';
 import * as asgCycling from './asg-cycling';
 import * as cluster from './cluster';
 import * as clusterAutoScalingSection from './cluster-auto-scaling';
@@ -71,8 +70,10 @@ async function getCompiledEcsTemplate(stackName: string, clusterName: string, ow
     const autoScaling = serviceAutoScalingSection.getTemplateAutoScalingConfig(ownServiceContext, clusterName);
 
     // Configure containers in the task definition
-    const containerConfigs = containersSection.getContainersConfig(ownServiceContext, dependenciesDeployContexts, clusterName);
+    const containerConfigs = await containersSection.getContainersConfig(ownServiceContext, dependenciesDeployContexts, clusterName);
     const oneOrMoreTasksHasRouting = routingSection.oneOrMoreTasksHasRouting(ownServiceContext);
+
+    const executionPolicyStatements = containersSection.getExecutionRuleSecretStatements(ownServiceContext, containerConfigs);
 
     const logRetention = ownServiceContext.params.log_retention_in_days;
 
@@ -95,6 +96,7 @@ async function getCompiledEcsTemplate(stackName: string, clusterName: string, ow
         vpcId: accountConfig.vpc,
         serviceRoleName,
         policyStatements: getTaskRoleStatements(ownServiceContext, dependenciesDeployContexts),
+        executionPolicyStatements,
         deploymentSuffix: Math.floor(Math.random() * 10000), // ECS won't update unless something in the service changes.
         tags: tagging.getTags(ownServiceContext),
         containerConfigs,

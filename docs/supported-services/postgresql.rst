@@ -134,9 +134,9 @@ In addition, the PostgreSQL service puts the following credentials into the EC2 
 
    * - Parameter Name 
      - Description
-   * - <parameter_prefix>.<service_name>.db_username
+   * - /<parameter_prefix>/<service_name>/db_username
      - The username for your database user.
-   * - <parameter_prefix>.<service_name>.db_password
+   * - /<parameter_prefix>/<service_name>/db_password
      - The password for your database user.
 
 .. NOTE::

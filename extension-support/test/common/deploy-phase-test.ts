@@ -16,13 +16,7 @@
  */
 import {expect} from 'chai';
 import * as fs from 'fs';
-import {
-    AccountConfig,
-    DeployContext,
-    ServiceConfig,
-    ServiceContext,
-    ServiceType
-} from 'handel-extension-api';
+import {DeployContext, ServiceConfig, ServiceContext, ServiceType} from 'handel-extension-api';
 import 'mocha';
 import * as sinon from 'sinon';
 import * as cloudFormationCalls from '../../src/aws/cloudformation-calls';
@@ -198,9 +192,10 @@ describe('Deploy phase common module', () => {
 
             const policyStatements = deployPhase.getAllPolicyStatementsForServiceRole(serviceContext, ownServicePolicyStatements, dependenciesDeployContexts, true);
             expect(policyStatements.length).to.equal(5); // 2 of our own, plus 3 for the app secrets
-            expect(policyStatements[3].Resource[0]).to.contain(`parameter/${appName}.${envName}*`);
+            expect(policyStatements[3].Resource[0]).to.contain(`parameter/${appName}.${envName}.*`);
             expect(policyStatements[3].Resource[1]).to.contain(`parameter/${appName}/${envName}/*`);
-            expect(policyStatements[3].Resource[2]).to.contain(`parameter/handel.global*`);
+            expect(policyStatements[3].Resource[2]).to.contain(`parameter/handel/global/*`);
+            expect(policyStatements[3].Resource[3]).to.contain(`parameter/handel.global.*`);
         });
         it('should optionally include permissions to put and get cloudwatch metrics', async () => {
             const ownServicePolicyStatements = [{
@@ -232,12 +227,26 @@ describe('Deploy phase common module', () => {
         });
     });
 
-    describe('addDbCredentialToParameterStore', () => {
+    describe('addItemToSSMParameterStore', () => {
         it('should store the database password to the parameter store', async () => {
             const storeParamStub = sandbox.stub(ssmCalls, 'storeParameter').resolves(true);
             const result = await deployPhase.addItemToSSMParameterStore(serviceContext, 'db_username', 'FakeUsername');
+
             expect(result).to.equal(true);
-            expect(storeParamStub.callCount).to.equal(1);
+            expect(storeParamStub.callCount).to.equal(2);
+
+            const actualNames = storeParamStub.getCalls().map(it => it.args[0]);
+            const actualTypes = storeParamStub.getCalls().map(it => it.args[1]);
+            const actualValues = storeParamStub.getCalls().map(it => it.args[2]);
+
+            expect(actualNames).to.include(
+                'FakeApp.FakeEnv.FakeService.db_username'
+            );
+            expect(actualNames).to.include(
+                '/FakeApp/FakeEnv/FakeService/db_username'
+            );
+            expect(actualTypes).to.eql(['SecureString', 'SecureString']);
+            expect(actualValues).to.eql(['FakeUsername', 'FakeUsername']);
         });
     });
 

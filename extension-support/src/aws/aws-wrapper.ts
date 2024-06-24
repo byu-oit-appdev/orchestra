@@ -112,8 +112,46 @@ const awsWrapper = {
         deleteParameters: (params: AWS.SSM.DeleteParametersRequest): Promise<AWS.SSM.DeleteParametersResult> => {
             const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
             return ssm.deleteParameters(params).promise();
+        },
+        describeParameters: (params: AWS.SSM.DescribeParametersRequest): Promise<AWS.SSM.ParameterMetadata[]> => {
+            const ssm = new AWS.SSM({ apiVersion: '2014-11-06' });
+            return nextTokenStyleList(p => ssm.describeParameters(p), params, r => r.Parameters);
+        },
+        getParametersByPath: (params: AWS.SSM.GetParametersByPathRequest): Promise<AWS.SSM.Parameter[]> => {
+            const ssm = new AWS.SSM({apiVersion: '2014-11-06'});
+            return nextTokenStyleList(p => ssm.getParametersByPath(p), params, r => r.Parameters);
+        },
+        getParameters: (params: AWS.SSM.GetParametersRequest): Promise<AWS.SSM.GetParametersResult> => {
+            const ssm = new AWS.SSM({apiVersion: '2014-11-06'});
+            return ssm.getParameters(params).promise();
         }
     }
 };
+
+async function nextTokenStyleList<P extends {NextToken?: string}, R extends {NextToken?: string}, V>(
+    fn: (params: P) => AWS.Request<R, AWS.AWSError>,
+    params: P,
+    extract: (result: R) => V[] | undefined
+): Promise<V[]> {
+    return makeCall(undefined);
+
+    async function makeCall(
+        token: string | undefined
+    ): Promise<V[]> {
+        const results = [];
+        params.NextToken = token;
+
+        const result = await fn(params).promise();
+        const extracted = extract(result);
+        if (extracted) {
+            results.push(...extracted);
+        }
+        if (result.NextToken) {
+            const next = await makeCall(result.NextToken);
+            results.push(...next);
+        }
+        return results;
+    }
+}
 
 export default awsWrapper;

@@ -10,6 +10,8 @@ Many applications have a need to securely store and access *secrets*. These secr
     
     Handel provides a different mechanism for passing secrets to your application, as explained in this document.
 
+.. _accessing-secrets-application:
+
 Application Secrets in Handel
 -----------------------------
 Handel uses the `EC2 Systems Manager Parameter Store <https://aws.amazon.com/ec2/systems-manager/parameter-store/>`_ for secrets storage. This service provides a key/value store where you can securely store secrets in a named parameter. You can then call the AWS API from your application to obtain these secrets.
@@ -44,7 +46,11 @@ This Lambda, when deployed, will be able to access any EC2 Parameter Store param
 
 .. WARNING::
 
-    Previously Handel wired permmissions based on a prefix like: ``<appName>.<environmentName>`` This functionality is being deprecated in favor of paths. As a convenience, Handel still wires the permissions and injects an environment variable called ``HANDEL_PARAMETER_STORE_PREFIX`` into your application. This variable contains the pre-built ``<appName>.<environmentName>`` prefix so that you don't have to build it yourself. Please only use prefix if required. Otherwise Path is preferred. More info can be found `Here <https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-su-organize.html>`_
+    Previously Handel wired permissions based on a prefix like: ``<appName>.<environmentName>`` This functionality is being deprecated in favor of paths. As a convenience, Handel still wires the permissions and injects an environment variable called ``HANDEL_PARAMETER_STORE_PREFIX`` into your application. This variable contains the pre-built ``<appName>.<environmentName>`` prefix so that you don't have to build it yourself. Please only use prefix if required. Otherwise Path is preferred. More info can be found `Here <https://docs.aws.amazon.com/systems-manager/latest/userguide/sysman-paramstore-su-organize.html>`_
+
+    Any Handel services which add secrets to Parameter Store will, by default, create both path- and dot-style parameters.
+
+.. _accessing-secrets-global:
 
 Global Parameters
 ~~~~~~~~~~~~~~~~~

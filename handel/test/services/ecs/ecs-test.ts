@@ -237,6 +237,7 @@ describe('ecs deployer', () => {
                 Name: 'myapp.internal.'
             }]);
             const getStackStub = sandbox.stub(awsCalls.cloudFormation, 'getStack').resolves(null);
+            const ssmStub = sandbox.stub(awsCalls.ssm, 'listParameterNamesStartingWith').resolves([]);
             const uploadDirStub = sandbox.stub(deployPhase, 'uploadDirectoryToHandelBucket').resolves({});
             const createStackStub = sandbox.stub(awsCalls.cloudFormation, 'createStack').resolves({});
             const deployStackStub = sandbox.stub(deployPhase, 'deployCloudFormationStack').resolves({});

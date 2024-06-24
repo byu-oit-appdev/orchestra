@@ -14,7 +14,7 @@
  * limitations under the License.
  *
  */
-import { ServiceConfig, Tags } from 'handel-extension-api';
+import {ExtraSecrets, HasInjectableSecrets, ServiceConfig, Tags} from 'handel-extension-api';
 import {
     AutoScalingConfig,
     ContainerConfig,
@@ -56,6 +56,7 @@ export interface HandlebarsEcsTemplateConfig {
     vpcId: string;
     serviceRoleName: string;
     policyStatements: any[];
+    executionPolicyStatements: any[];
     deploymentSuffix: number;
     tags: Tags;
     containerConfigs: HandlebarsEcsTemplateContainer[];

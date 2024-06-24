@@ -46,6 +46,7 @@ export interface HandlebarsFargateTemplateConfig {
     minimumHealthyPercentDeployment: string;
     vpcId: string;
     policyStatements: any[];
+    executionPolicyStatements: any[];
     deploymentSuffix: number;
     tags: Tags;
     containerConfigs: HandlebarsEcsTemplateContainer[];
