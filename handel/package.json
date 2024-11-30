@@ -18,7 +18,7 @@
   "author": "David Woodruff",
   "license": "Apache-2.0",
   "dependencies": {
-    "ajv": "^5.2.3",
+    "ajv": "^6.12.3",
     "ajv-errors": "^1.0.1",
     "aws-sdk": "^2.503.0",
     "caporal": "1.1.0",
