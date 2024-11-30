@@ -16,7 +16,7 @@
   "author": "David Woodruff",
   "license": "Apache-2.0",
   "dependencies": {
-    "ajv": "^5.2.3",
+    "ajv": "^6.12.3",
     "ajv-errors": "^1.0.1",
     "archiver": "^3.1.0",
     "handel-extension-api": "^0.40.0",
