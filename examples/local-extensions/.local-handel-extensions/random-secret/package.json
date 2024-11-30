@@ -13,7 +13,7 @@
   "author": "",
   "license": "Apache-2.0",
   "dependencies": {
-    "aws-sdk": "^2.218.1",
+    "aws-sdk": "^2.814.0",
     "constant-case": "^2.0.0",
     "handel-extension-api": "^0.26.0",
     "randomstring": "^1.1.5",
