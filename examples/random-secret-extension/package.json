@@ -23,7 +23,7 @@
     "typescript": "^2.9.2"
   },
   "dependencies": {
-    "aws-sdk": "^2.433.0",
+    "aws-sdk": "^2.814.0",
     "constant-case": "^2.0.0",
     "handel-extension-api": "^0.26.15",
     "randomstring": "^1.1.5",
